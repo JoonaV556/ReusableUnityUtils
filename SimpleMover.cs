@@ -1,49 +1,46 @@
+using MyBox;
 using UnityEngine;
 using UnityEngine.Events;
 
 /// <summary>
-/// Moves the parent object around. 
+/// Moves the parent object around with smooth easing.
 /// Can be ordered to start and stop. 
 /// Invokes unity events when movement starts or stops
 /// </summary>
 public class SimpleMover : MonoBehaviour {
 
-    public enum MoveDirection { Forward, Left, Back, Down } // Enum for move direction 
-    public MoveDirection moveDirection = MoveDirection.Forward; // Variable to hold the direction of movement
+    [Tooltip("The maximum speed the object can move at.")]
+    public float maxMoveSpeed = 5f;
 
-    [Space(10)]
-    public float moveSpeed = 5f;
+    [Tooltip("The rate at which the object speeds up or slows down.")]
+    public float acceleration = 2f;
 
-    // Space attribute
-    [Space(10)]
+    [Tooltip("The direction the object will move in.")]
+    public MoveDirection moveDirection;
+
+    [Tooltip("Should the object move automatically on start?")]
+    public bool MoveOnStart = false;
+
+    [Tooltip("Event triggered when the object starts moving.")]
     public UnityEvent onStartMovement;
+
+    [Tooltip("Event triggered when the object stops moving.")]
     public UnityEvent onStopMovement;
 
+    private float currentSpeed = 0f;
     private bool isMoving = false;
 
-    void Update() {
-        if (isMoving) {
-            Vector3 direction;
+    public enum MoveDirection { Forward, Left, Back, Down }
 
-            // Determine the direction of movement based on the value of moveDirection
-            switch (moveDirection) {
-                case MoveDirection.Left:
-                    direction = Vector3.left;
-                    break;
-                case MoveDirection.Back:
-                    direction = Vector3.back;
-                    break;
-                case MoveDirection.Down:
-                    direction = Vector3.down;
-                    break;
-                default: // Default to forward if no valid direction is provided
-                    direction = Vector3.forward;
-                    break;
-            }
-
-            // Move the object in the determined direction
-            transform.Translate(direction * moveSpeed * Time.deltaTime);
+    private void Start() {
+        if (MoveOnStart)
+        {
+            StartMovement();
         }
+    }
+
+    void Update() {
+        HandleMovement();
     }
 
     public void StartMovement() {
@@ -54,6 +51,32 @@ public class SimpleMover : MonoBehaviour {
     public void StopMovement() {
         isMoving = false;
         onStopMovement.Invoke();
+    }
+
+    private void HandleMovement() {
+        if (isMoving) {
+            currentSpeed = Mathf.Min(maxMoveSpeed, currentSpeed + acceleration * Time.deltaTime);
+        } else {
+            currentSpeed = Mathf.Max(0, currentSpeed - acceleration * Time.deltaTime);
+        }
+
+        if (currentSpeed > 0) {
+            Vector3 direction = GetDirection();
+            transform.Translate(direction * currentSpeed * Time.deltaTime);
+        }
+    }
+
+    private Vector3 GetDirection() {
+        switch (moveDirection) {
+            case MoveDirection.Left:
+                return Vector3.left;
+            case MoveDirection.Back:
+                return Vector3.back;
+            case MoveDirection.Down:
+                return Vector3.down;
+            default:
+                return Vector3.forward;
+        }
     }
 }
 
