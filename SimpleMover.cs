@@ -8,30 +8,52 @@ using UnityEngine.Events;
 /// </summary>
 public class SimpleMover : MonoBehaviour {
 
-    public float moveSpeed = 5f; // Default movement speed
-    private bool isMoving = false; // Flag to track movement state
+    public enum MoveDirection { Forward, Left, Back, Down } // Enum for move direction 
+    public MoveDirection moveDirection = MoveDirection.Forward; // Variable to hold the direction of movement
 
-    public UnityEvent onStartMovement; // UnityEvent triggered when movement starts
-    public UnityEvent onStopMovement; // UnityEvent triggered when movement stops
+    [Space(10)]
+    public float moveSpeed = 5f;
 
-    // Update is called once per frame
+    // Space attribute
+    [Space(10)]
+    public UnityEvent onStartMovement;
+    public UnityEvent onStopMovement;
+
+    private bool isMoving = false;
+
     void Update() {
-        // Check if the object should be moving
         if (isMoving) {
-            // Move the object forwards based on the defined speed
-            transform.Translate(Vector3.forward * moveSpeed * Time.deltaTime);
+            Vector3 direction;
+
+            // Determine the direction of movement based on the value of moveDirection
+            switch (moveDirection) {
+                case MoveDirection.Left:
+                    direction = Vector3.left;
+                    break;
+                case MoveDirection.Back:
+                    direction = Vector3.back;
+                    break;
+                case MoveDirection.Down:
+                    direction = Vector3.down;
+                    break;
+                default: // Default to forward if no valid direction is provided
+                    direction = Vector3.forward;
+                    break;
+            }
+
+            // Move the object in the determined direction
+            transform.Translate(direction * moveSpeed * Time.deltaTime);
         }
     }
 
-    // Public function to start the movement
     public void StartMovement() {
         isMoving = true;
-        onStartMovement.Invoke(); // Trigger the UnityEvent when movement starts
+        onStartMovement.Invoke();
     }
 
-    // Public function to stop the movement
     public void StopMovement() {
         isMoving = false;
-        onStopMovement.Invoke(); // Trigger the UnityEvent when movement stops
+        onStopMovement.Invoke();
     }
 }
+
