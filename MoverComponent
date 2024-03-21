@@ -1,0 +1,399 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Net;
+using UnityEngine;
+
+/// <summary>
+/// Moves objects from one point to another. 
+/// </summary>
+public class MoverComponent : MonoBehaviour {
+    // Usage: 
+    // Create new instances of the mover in monobehavior scripts using the constructor
+    // Update the mover in the monobhaviors Update() method
+    // Track if the mover is complete in the Update() method
+
+    // The object which is being moved
+
+    public enum MoverMoveState {
+        MovingAlongPath,
+        MovingToPoint,
+        Idle
+    }
+
+    public enum MoverRotateState {
+        Rotating,
+        Idle
+    }
+
+    public event Action OnReachedDestination; // Triggered when the Moved object reaches its destination
+
+    [Tooltip("How fast the object is moved (m per second)")]
+    public float movementSpeed = 1f;
+
+    [Tooltip("Should the mover print debug messages when objectives has been reached etc.?")]
+    public bool EnableDebugMessages = false;
+
+    [Tooltip("How fast is the object rotated? (Degrees per second)")]
+    public float rotationSpeed = 10f; // Rotation speed in degress per second
+
+    #region MovementVariables
+
+    private Transform ObjectToMove;
+
+    bool hasReachedCurrentTarget = false; // Is the movement complete? i.e. has the movable reached its destination
+
+    float reachedDistance = 0.02f; // When the distance between the moved object and the target distance is smaller than this value, the movement is complete
+
+    private Vector3 currentMovementTargetPoint; // The point where the object is currently moving towards
+
+    private Transform targetTransform; // Used for moving target towards specific transforms
+
+    private MoverMoveState currentMoveState = MoverMoveState.Idle; // Tracks the current movement being executed
+
+    private List<Vector3> pathPointsNotReached; // List of path points which the movable has not yet reached, but will move along. This is updated when the movable reaches the points. Only used when currentMoveState is MovingAlongPath
+
+    #endregion
+
+    #region RotationVariables
+
+    private Transform objectToRotate = null;
+
+    private MoverRotateState currentRotateState = MoverRotateState.Idle; // Tracks the current rotation being executed
+
+    private Vector3 howMuchToRotate = Vector3.zero;
+
+    private Vector3 alreadyRotated = Vector3.zero; // How much have we already rotated?
+
+    private Vector3 rotationDirection = Vector3.zero; // Stores data about which direction the object should be rotated in each axis. Values can be -1, 1 and 0
+
+    // Used for tracking if the object has been rotated enough on each axis
+    private bool rotatedEnoughOnX = false;
+    private bool rotatedEnoughOnY = false;
+    private bool rotatedEnoughOnZ = false;
+    private bool rotatedEnoughOnAll = false;
+
+    #endregion
+
+    private void Update() {
+        // Update the movement
+        TryToMove();
+        // Update the rotation
+        TryToRotate();
+    }
+
+    #region MovementMethods
+
+    /// <summary>
+    /// Checks if there is any kind of movement currently happening. If movement is happening, moves the target object accordingly
+    /// </summary>
+    private void TryToMove() {
+        if (currentMoveState == MoverMoveState.Idle) {
+            return; // Do nothing if the movement is complete
+        }
+
+        // Update targetPoint in realtime, based on current movement state
+        switch (currentMoveState) {
+            case MoverMoveState.MovingAlongPath:
+                currentMovementTargetPoint = pathPointsNotReached[0];
+                break;
+            case MoverMoveState.MovingToPoint:
+                currentMovementTargetPoint = targetTransform.position;
+                break;
+        }
+
+        // Check if the target position has been reached
+        hasReachedCurrentTarget = HasReachedTarget();
+
+        if (hasReachedCurrentTarget) {
+
+            // Do different things based on the current movement state
+            switch (currentMoveState) {
+
+                case MoverMoveState.MovingAlongPath:
+
+                    // Position object exactly at the target position to negate possible floating point errors
+                    ObjectToMove.position = currentMovementTargetPoint;
+
+                    // Check if there are more points left to move towards, not counting the current one
+                    bool morePointsToReach = pathPointsNotReached.Count > 1;
+
+                    if (morePointsToReach) {
+                        // If there are still more points which have not been reached, remove the current one 
+                        pathPointsNotReached.RemoveAt(0);
+                        // + Set the next point as the current target
+                        currentMovementTargetPoint = pathPointsNotReached[0];
+                        break;
+                    }
+
+                    CompleteMovement(); // The last point has been reached, so complete the movement
+                    break;
+
+                case MoverMoveState.MovingToPoint:
+                    // if no more points left, complete the movement
+                    CompleteMovement();
+                    break;
+            }
+        }
+
+        if (currentMoveState == MoverMoveState.Idle) {
+            return; // Do nothing if the movement is complete
+        }
+        // Move the object
+        Move();
+    }
+
+    private void CompleteMovement() {
+        // Position object exactly at the end position to negate possible floating point errors
+        ObjectToMove.position = currentMovementTargetPoint;
+        // Update state
+        SetState(MoverMoveState.Idle);
+        // Optionally enable debugging
+        if (EnableDebugMessages) {
+            Debug.Log("Mover reached target destination!");
+        }
+        // Trigger event
+        OnReachedDestination?.Invoke();
+    }
+
+    /// <summary>
+    /// Starts moving the object towards a defined end point
+    /// </summary>
+    public void MoveTowardsPoint(Transform Movable, Transform EndPoint) {
+        ObjectToMove = Movable;
+        targetTransform = EndPoint;
+        SetState(MoverMoveState.MovingToPoint);
+    }
+
+    public void MoveTowardsPoint(Transform Movable, Transform EndPoint, float MoveSpeed) {
+        movementSpeed = MoveSpeed;
+        ObjectToMove = Movable;
+        targetTransform = EndPoint;
+        SetState(MoverMoveState.MovingToPoint);
+    }
+
+    /// <summary>
+    /// Starts moving the object along multiple points in the order they are passed
+    /// </summary>
+    public void MoveAlongPath(Transform Movable, Transform[] PathPoints) {
+        // Assign movable
+        ObjectToMove = Movable;
+
+        // Reset current path points if they exist
+        pathPointsNotReached = new();
+        // Assign new path 
+        foreach (Transform pathPoint in PathPoints) {
+            pathPointsNotReached.Add(pathPoint.position);
+        }
+
+        // Update movement state
+        SetState(MoverMoveState.MovingAlongPath);
+    }
+
+    public void MoveAlongPath(Transform Movable, Vector3[] PathPoints) {
+        // Assign movable
+        ObjectToMove = Movable;
+
+        // Reset current path points if they exist
+        pathPointsNotReached = new();
+        // Assign new path 
+        foreach (Vector3 pathPoint in PathPoints) {
+            pathPointsNotReached.Add(pathPoint);
+        }
+
+        // Update movement state
+        SetState(MoverMoveState.MovingAlongPath);
+    }
+
+    /// <summary>
+    /// Destroyer for the mover instances 
+    /// </summary>
+    ~MoverComponent() {
+        // Unhook references just in case - probably not needed
+        ObjectToMove = null;
+    }
+
+    private bool HasReachedTarget() {
+        // Check if the object is close enough to the target, 
+        float distanceToTarget = Vector3.Distance(ObjectToMove.position, currentMovementTargetPoint);
+        return distanceToTarget < reachedDistance;
+    }
+
+    private void Move() {
+        // Get direction vector towards end point
+        Vector3 moveDirection = currentMovementTargetPoint - ObjectToMove.position;
+        // Move the object 
+        ObjectToMove.position += (moveDirection.normalized * movementSpeed) * Time.deltaTime;
+    }
+
+    /// <summary>
+    /// Is the movement complete? i.e. has the movable reached its destination
+    /// </summary>
+    /// <returns>Is the movement complete? i.e. has the movable reached its destination</returns>
+    public bool IsComplete() {
+        return hasReachedCurrentTarget;
+    }
+
+    private void SetState(MoverMoveState NewState) {
+        currentMoveState = NewState;
+    }
+
+    #endregion
+
+    #region RotationMethods
+
+    private void TryToRotate() {
+        if (currentRotateState != MoverRotateState.Rotating) { return; } // Do nothing if not rotating
+
+        // Adjust the rotation amount with desired speed and frame time 
+        Vector3 rotationAmountThisFrame = RotationToAddThisFrame();
+        // Vector3 rotationAmountThisFrame = rotationDirection * rotationSpeed * Time.deltaTime;
+
+        // Add rotation to the transform
+        objectToRotate.Rotate(rotationAmountThisFrame, Space.Self);
+
+        // Track how much have we already rotated on each axis to eventually end the rotation
+        alreadyRotated += rotationAmountThisFrame;
+
+        // Check if we have rotated enough separately on each axis & complete the rotation
+        CheckIfRotatedEnough();
+    }
+
+    /// <summary>
+    /// Instantly adds rotation to given axis
+    /// </summary>
+    /// <param name="targetObject">Object to rotate</param>
+    /// <param name="DegreesToAdd">Degrees to rotate on each axis</param>
+    public void InstaRotate(Transform targetObject, Vector3 DegreesToAdd) {
+        targetObject.Rotate(DegreesToAdd, Space.World);
+    }
+
+    /// <summary>
+    /// Adds the given amount of rotation to the objects local rotation smoothly over time. The actual rotation logic happens inside Update()
+    /// </summary>
+    /// <param name="EulersToAdd">How much rotation to add to each axis of the transform</param>
+    /// <param name="rotationSpeed">How fast should the rotation happen? (degrees per second)</param>
+    public void GradualLocalRotate(Transform targetObject, Vector3 RotationToAdd, float RotationSpeed) {
+        // Update target object
+        objectToRotate = targetObject;
+        // Update state for tracking rotation
+        currentRotateState = MoverRotateState.Rotating;
+        // Update speedeeed
+        rotationSpeed = RotationSpeed;
+
+        // Init rotation values
+        howMuchToRotate = RotationToAdd; // How much the object should be rotated in total (in euler angles)
+        alreadyRotated = Vector3.zero; // How much has the object been rotated already, of course zero at start
+
+        // Calculate desired rotation direction
+        CalculateRotationDirections();
+
+        // Update rotation booleans to track rotation completion correctly
+        rotatedEnoughOnX = false;
+        rotatedEnoughOnY = false;
+        rotatedEnoughOnZ = false;
+        rotatedEnoughOnAll = false;
+
+        // Check on which axis to rotate the object
+        CheckIfRotatedEnough();
+    }
+
+    /// <summary>
+    /// Checks which direction the object should be rotated on each axis. Each axis will be assigned either 1, -1 or 0, meaning positive, negative, or no direction. 
+    /// </summary>
+    private void CalculateRotationDirections() {
+
+        // If else statements prevent division by zero errors
+        if (howMuchToRotate.x == 0) {
+            rotationDirection.x = 0f;
+        } else {
+            rotationDirection.x = howMuchToRotate.x / Math.Abs(howMuchToRotate.x);
+        }
+
+        if (howMuchToRotate.y == 0) {
+            rotationDirection.y = 0f;
+        } else {
+            rotationDirection.y = howMuchToRotate.y / Math.Abs(howMuchToRotate.y);
+        }
+
+        if (howMuchToRotate.z == 0) {
+            rotationDirection.z = 0f;
+        } else {
+            rotationDirection.z = howMuchToRotate.z / Math.Abs(howMuchToRotate.z);
+        } // This should give 0, 1 or -1 on each axis, which gives us the desired direction to rotate towards
+    }
+
+    /// <summary>
+    /// Checks if the object has been rotated enough on each axis & completes the rotation on individual axis
+    /// </summary>
+    private void CheckIfRotatedEnough() {
+        // Tsekkaa vain jos ei ole jo valmis
+        // Jos absolute on isompi kuin howMuch absolute -> on valmis
+
+        // Check x
+        if (!rotatedEnoughOnX) {
+            // Check if the absolute of the already rotated is larger than the howMuchtorotate
+            if (Math.Abs(alreadyRotated.x) > Math.Abs(howMuchToRotate.x)) {
+                rotatedEnoughOnX = true; // If the absolute is larger than the how much, has been rotated enough
+            }
+        }
+
+        // Check y 
+        if (!rotatedEnoughOnY) {
+            // Check if the absolute of the already rotated is larger than the howMuchtorotate
+            if (Math.Abs(alreadyRotated.y) > Math.Abs(howMuchToRotate.y)) {
+                rotatedEnoughOnY = true; // If the absolute is larger than the how much, has been rotated enough
+            }
+        }
+
+        // Check z
+        if (!rotatedEnoughOnZ) {
+            // Check if the absolute of the already rotated is larger than the howMuchtorotate
+            if (Math.Abs(alreadyRotated.z) > Math.Abs(howMuchToRotate.z)) {
+                rotatedEnoughOnZ = true; // If the absolute is larger than the how much, has been rotated enough
+            }
+        }
+
+        // Check all axis
+        if (!rotatedEnoughOnAll) {
+            rotatedEnoughOnAll = rotatedEnoughOnX && rotatedEnoughOnY && rotatedEnoughOnZ;
+        }
+
+        // End the rotation if rotated enough on all axis 
+        if (rotatedEnoughOnAll) {
+            if (EnableDebugMessages) { print("Completed rotation!"); } // Debug message
+            currentRotateState = MoverRotateState.Idle; // Update state so rotation stops
+        }
+    }
+
+    /// <summary>
+    /// Calculates how much rotation should be added to each axis during a single frame. Takes into account if the individual axises have been rotated enough
+    /// </summary>
+    /// <returns>How much to rotate on each axis.</returns>
+    private Vector3 RotationToAddThisFrame() {
+        Vector3 rotationToAdd = Vector3.zero; // Rotation to add in eulers
+
+        if (!rotatedEnoughOnX) {
+            rotationToAdd.x = rotationDirection.x * rotationSpeed * Time.deltaTime; // If not yet rotated enough, set desired amount
+        } else {
+            rotationToAdd.x = 0f; // If the axis has been rotated enough, don't add any more rotation
+        }
+
+        if (!rotatedEnoughOnY) {
+            rotationToAdd.y = rotationDirection.y * rotationSpeed * Time.deltaTime;
+        } else {
+            rotationToAdd.y = 0f;
+        }
+
+        if (!rotatedEnoughOnZ) {
+            rotationToAdd.z = rotationDirection.z * rotationSpeed * Time.deltaTime;
+        } else {
+            rotationToAdd.z = 0f;
+        }
+
+        return rotationToAdd;    
+    }
+
+    #endregion
+
+}
