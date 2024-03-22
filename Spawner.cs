@@ -3,6 +3,9 @@ using System.Collections;
 using UnityEngine;
 
 public class Spawner : MonoBehaviour {
+    // Simple spawner script
+    // Instantiates copies of user defined prefab at parent transform position
+    
     public GameObject prefabToSpawn; // The prefab to spawn
     public float spawnFrequency = 1f; // The frequency of spawning
 
