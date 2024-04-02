@@ -8,6 +8,8 @@ using UnityEngine;
 /// Moves objects from one point to another. 
 /// </summary>
 public class MoverComponent : MonoBehaviour {
+    // Please Note: This script is ok for very basic stuff, but I recommend using the SimpleMover.cs if you want more readable code and smooth movement.
+    
     // Usage: 
     // Create new instances of the mover in monobehavior scripts using the constructor
     // Update the mover in the monobhaviors Update() method
