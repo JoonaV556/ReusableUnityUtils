@@ -5,7 +5,7 @@ using UnityEngine;
 public class GameObjectRecorderUtility : MonoBehaviour {
     // Please note: MyBox utils package is required for the [ButtonMethod] attributes to work. If you don't wanna use it, just remove the attributes.
     
-    // Utility component for recording gameobjects.
+    // Utility component for recording movement of gameobjects in editor playmode.
     // Uses the Unity recorder package and GameObjectRecorder class to record gameobject movement to reusable animation clips.
 
     // Records only transform components by default 
