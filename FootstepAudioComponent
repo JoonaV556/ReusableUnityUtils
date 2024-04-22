@@ -4,7 +4,8 @@ using UnityEngine;
 /// <summary>
 /// Simple audio script for character footstep sounds.
 /// </summary>
-public class FootstepAudioComponent : MonoBehaviour {
+public class FootstepAudioComponent : MonoBehaviour
+{
     // Features:
     // - Simple audio script for character footstep sounds
     // - Useful for 3D spatialized footstep sounds on first person characters
@@ -37,6 +38,8 @@ public class FootstepAudioComponent : MonoBehaviour {
     public AudioClip FootstepSFX;
     [Tooltip("Audio clip played when character lands on ground")]
     public AudioClip LandedOnGroundSFX;
+    [Tooltip("Audio clip played when character jumps")]
+    public AudioClip JumpSFX;
     [Tooltip("Transform for the left foot")]
     public Transform LeftFoot;
     [Tooltip("Transform for the right foot")]
@@ -50,36 +53,44 @@ public class FootstepAudioComponent : MonoBehaviour {
 
     private AudioSource leftFootAudioSource;
     private AudioSource rightFootAudioSource;
-    private AudioSource centerAudioSource;
+    private AudioSource landingAudioSource;
+    private AudioSource jumpAudioSource;
     private Coroutine footstepCoroutine;
     private float lastFootstepTime = -1f;
     private bool isRightFoot = true;
     private float actualFootstepInterval = 0.5f; // Smoothly adjusted footstep interval based on character speed and min and max values
-    private bool isPlayingFootstep = false; 
+    private bool isPlayingFootstep = false;
 
     #endregion
 
-    protected virtual void Start() {
+    protected virtual void Start()
+    {
         // Add footstep audio sources to each foot transform
         leftFootAudioSource = LeftFoot.gameObject.AddComponent<AudioSource>();
         rightFootAudioSource = RightFoot.gameObject.AddComponent<AudioSource>();
-        centerAudioSource = CenterPoint.gameObject.AddComponent<AudioSource>();
+        landingAudioSource = CenterPoint.gameObject.AddComponent<AudioSource>();
+        jumpAudioSource = CenterPoint.gameObject.AddComponent<AudioSource>();
         // Init the audio sources
         leftFootAudioSource.clip = FootstepSFX;
         rightFootAudioSource.clip = FootstepSFX;
-        centerAudioSource.clip = LandedOnGroundSFX;
+        landingAudioSource.clip = LandedOnGroundSFX;
+        jumpAudioSource.clip = JumpSFX;
         leftFootAudioSource.spatialBlend = 1;
         rightFootAudioSource.spatialBlend = 1;
-        centerAudioSource.spatialBlend = 1;
+        landingAudioSource.spatialBlend = 1;
+        jumpAudioSource.spatialBlend = 1;
         leftFootAudioSource.volume = FootstepVolume;
         rightFootAudioSource.volume = FootstepVolume;
-        centerAudioSource.volume = FootstepVolume;
+        landingAudioSource.volume = FootstepVolume;
+        jumpAudioSource.volume = FootstepVolume;
         leftFootAudioSource.loop = false;
         rightFootAudioSource.loop = false;
-        centerAudioSource.loop = false;
+        landingAudioSource.loop = false;
+        jumpAudioSource.loop = false;
     }
 
-    private void Update() {
+    private void Update()
+    {
         // Clamp the movement speed alpha to 0-1 range, just in case this is not done in child classes
         float speedAlpha = Mathf.Clamp(MovementSpeedAlpha(), 0f, 1f);
         // Smoothly adjust the footstep interval based on the character's movement speed
@@ -89,55 +100,68 @@ public class FootstepAudioComponent : MonoBehaviour {
     /// <summary>
     /// Returns value between 0 and 1 representing the character's current walk speed. 0 means default walk speed, 1 means maximum walk speed. Override this method to provide custom logic for determining the movement speed alpha.
     /// </summary>
-    protected virtual float MovementSpeedAlpha() {
+    protected virtual float MovementSpeedAlpha()
+    {
         // Default implementation, override this method to provide custom logic for determining the movement speed alpha
         return 0f;
-    }   
+    }
 
-    public void OnMovementStarted() {
-        if (!isPlayingFootstep) {
+    public void OnMovementStarted()
+    {
+        if (!isPlayingFootstep)
+        {
             isPlayingFootstep = true;
         }
         // Start the footstep coroutine if it's not already running
-        if (footstepCoroutine == null) {
+        if (footstepCoroutine == null)
+        {
             footstepCoroutine = StartCoroutine(PlayFootstepSound());
         }
     }
 
-    public void OnMovementStopped() {
-        if (isPlayingFootstep) {
+    public void OnMovementStopped()
+    {
+        if (isPlayingFootstep)
+        {
             isPlayingFootstep = false;
         }
         // Stop the footstep coroutine
-        if (footstepCoroutine != null) {
+        if (footstepCoroutine != null)
+        {
             StopCoroutine(footstepCoroutine);
             footstepCoroutine = null;
         }
     }
 
-    public void OnLandedOnGround() {
-        centerAudioSource.Play();
+    public void OnLandedOnGround()
+    {
+        landingAudioSource.Play();
     }
 
-    private IEnumerator PlayFootstepSound() {
-        while (true) {
-            // Check if enough time has passed since the last footstep sound
-            if (Time.time - lastFootstepTime >= actualFootstepInterval) {
-                // Alternate between left and right foot
-                if (isRightFoot) {
-                    rightFootAudioSource.Play();
-                } else {
-                    leftFootAudioSource.Play();
-                }
+    public void OnJumped()
+    {
+        jumpAudioSource.Play();
+    }
 
-                // Toggle the foot for playloop
-                isRightFoot = !isRightFoot;
-
-                // Update the last footstep time
-                lastFootstepTime = Time.time;
-            } else {
-                yield return new WaitForSeconds(actualFootstepInterval - (Time.time - lastFootstepTime));
+    private IEnumerator PlayFootstepSound()
+    {
+        while (true)
+        {
+            // Alternate between left and right foot
+            if (isRightFoot)
+            {
+                rightFootAudioSource.Play();
             }
+            else
+            {
+                leftFootAudioSource.Play();
+            }
+
+            // Toggle the foot for playloop
+            isRightFoot = !isRightFoot;
+
+            // Update the last footstep time
+            lastFootstepTime = Time.time;
 
             // Wait for the footstep interval before playing the next sound
             yield return new WaitForSeconds(actualFootstepInterval);
